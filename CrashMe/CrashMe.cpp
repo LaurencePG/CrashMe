@@ -47,6 +47,12 @@ int GenerateDump(EXCEPTION_POINTERS* pExceptionPointers)
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
+LONG CALLBACK unhandled_handler(EXCEPTION_POINTERS* e)
+{
+	GenerateDump(e);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
 
 void NullPointer()
 {
@@ -59,6 +65,12 @@ void DoubleFree()
 	char* pBuffer = new char[32];
 	delete[] pBuffer;
 	delete[] pBuffer;
+}
+
+void DivdeByZero()
+{
+	int a = 0;
+	int b = 5 / a;
 }
 
 void StackOverflow()
@@ -83,10 +95,11 @@ void BuffeeOverflow()
 }
 
 typedef enum CrashCase {
-	BUFFER_OVERFLOW = 1,
+	NULL_POINTER = 1,
+	DIVIDE_BY_ZERO,
 	STACK_OVERFLOW,
 	DOUBLE_FREE,
-	NULL_POINTER
+	BUFFER_OVERFLOW
 };
 
 
@@ -94,34 +107,36 @@ typedef enum CrashCase {
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+
+	SetUnhandledExceptionFilter(unhandled_handler);
+
 	int i;
-	cout << "Please choose the crash case:\n \t1)Buffer Overflow\n \t2)Stack Overflow\n \t3)Duble free\n \t4)Access Null pointer\n";
+	cout << "Please choose the crash case:\n \
+		\t1)Access Null pointer\n \
+		\t2)Divide By Zero\n \
+		\t3)Stack Overflow\n \
+		\t4)Duble free\n \
+		\t5)Buffer Overflow\n";
 	cin >> i;
 	cout << "The value you entered is " << i;
 
-
-	__try
-	{
-		switch (i) {
-		case BUFFER_OVERFLOW:
-			BuffeeOverflow();
-			break;
-		case STACK_OVERFLOW:
-			StackOverflow();
-			break;
-		case DOUBLE_FREE:
-			DoubleFree();
-			break;
-		case NULL_POINTER:
-			NullPointer();
-			break;
-		}
-
+	switch (i) {
+	case NULL_POINTER:
+		NullPointer();
+		break;
+	case DIVIDE_BY_ZERO:
+		DivdeByZero();
+		break;
+	case STACK_OVERFLOW:
+		StackOverflow();
+		break;
+	case DOUBLE_FREE:
+		DoubleFree();
+		break;
+	case BUFFER_OVERFLOW:
+		BuffeeOverflow();
+		break;
 	}
-	__except (GenerateDump(GetExceptionInformation()))
-	{
-	}
-
 
 	return 0;
 }
