@@ -13,6 +13,7 @@ using namespace std;
 #include <windows.h>
 #include <stdio.h>
 #include <process.h>
+#include <mutex>
 
 int GenerateDump(EXCEPTION_POINTERS* pExceptionPointers)
 {
@@ -100,6 +101,7 @@ void BuffeeOverflow()
 #define BUFFER_SZIE 64
 char* g_pBuf = NULL;
 HANDLE g_hExitEvent;
+std::mutex g_lock;
 unsigned __stdcall ThreadCreateResourceFunc(void* pArguments)
 {
 	printf("In ThreadCreateResourceFunc...\n");
@@ -132,6 +134,42 @@ unsigned __stdcall ThreadUseResourceFunc(void* pArguments)
 	return 0;
 }
 
+unsigned __stdcall ThreadCreateResourceFuncWithLock(void* pArguments)
+{
+	printf("In ThreadCreateResourceFunc...\n");
+
+	g_pBuf = new char[BUFFER_SZIE];
+
+	WaitForSingleObject(
+		g_hExitEvent, // event handle
+		INFINITE);    // infinite wait
+
+	g_lock.lock();
+	delete[] g_pBuf;
+	::Sleep(5);
+	g_pBuf = NULL;
+	g_lock.unlock();
+	printf("delete buffer...\n");
+	return 0;
+}
+
+unsigned __stdcall ThreadUseResourceFuncWithLock(void* pArguments)
+{
+	printf("In ThreadUseResourceFunc...\n");
+	int count = 1;
+	while (true) {
+
+		g_lock.lock();
+		if (g_pBuf) {
+			sprintf_s(g_pBuf, BUFFER_SZIE, "fill the buffer with string: %d\n", count);
+			printf(g_pBuf);
+			count++;
+		}
+		g_lock.unlock();
+	}
+
+	return 0;
+}
 
 void RaceCondition()
 {
@@ -151,6 +189,38 @@ void RaceCondition()
 	hHandles[0] = (HANDLE)_beginthreadex(NULL, 0, &ThreadCreateResourceFunc, NULL, NULL, &threadIDs[0]);
 	// Create the second thread.
 	hHandles[1] = (HANDLE)_beginthreadex(NULL, 0, &ThreadUseResourceFunc, NULL, CREATE_SUSPENDED, &threadIDs[1]);
+
+	cin >> a;
+	printf("Resume worker threads...\n");
+	ResumeThread(hHandles[1]);
+
+	cin >> a;
+	SetEvent(g_hExitEvent);
+
+	WaitForMultipleObjects(2, hHandles, true, INFINITE);
+	// Destroy the thread object.
+	CloseHandle(hHandles[0]);
+	CloseHandle(hHandles[1]);
+}
+
+void FixRaceCondition()
+{
+	HANDLE hHandles[2];
+	unsigned threadIDs[2];
+	char a;
+
+	g_hExitEvent = CreateEventA(
+		NULL,               // default security attributes
+		TRUE,               // manual-reset event
+		FALSE,              // initial state is nonsignaled
+		"ExitEvent"  // object name
+		);
+
+	printf("Creating two threads...\n");
+	// Create the frist thread.
+	hHandles[0] = (HANDLE)_beginthreadex(NULL, 0, &ThreadCreateResourceFuncWithLock, NULL, NULL, &threadIDs[0]);
+	// Create the second thread.
+	hHandles[1] = (HANDLE)_beginthreadex(NULL, 0, &ThreadUseResourceFuncWithLock, NULL, CREATE_SUSPENDED, &threadIDs[1]);
 
 	cin >> a;
 	printf("Resume worker threads...\n");
@@ -217,7 +287,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		RaceCondition();
 		break;
 	case FIXED_RACE_CONDITION:
-
+		FixRaceCondition();
 		break;
 	}
 
